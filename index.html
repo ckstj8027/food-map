@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>식도락 지도 - 나만의 맛집 지도</title>
+  
+  <!-- Google Fonts & Material Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  
+  <!-- Leaflet.js CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- Leaflet.markercluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- Top Filter Bar -->
+    <header class="app-header">
+      <div class="header-logo">
+        <span class="material-symbols-rounded logo-icon">map</span>
+        <h1>식도락 지도</h1>
+      </div>
+      
+      <!-- Search & Filters Container -->
+      <div class="filter-controls">
+        <div class="search-box">
+          <span class="material-symbols-rounded search-icon">search</span>
+          <input type="text" id="search-input" placeholder="맛집 이름 검색...">
+        </div>
+        
+        <div class="select-wrapper">
+          <select id="category-filter">
+            <option value="ALL">전체 카테고리</option>
+            <option value="한식">한식</option>
+            <option value="중식">중식</option>
+            <option value="일식">일식</option>
+            <option value="양식">양식</option>
+            <option value="카페">카페/디저트</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        
+        <div class="select-wrapper">
+          <select id="status-filter">
+            <option value="ALL">방문 상태 (전체)</option>
+            <option value="VISITED">방문한 곳 (초록)</option>
+            <option value="WANT_TO_GO">가보고 싶은 곳 (빨간)</option>
+          </select>
+        </div>
+        
+        <button class="my-location-btn" id="geo-btn" title="현재 위치 가져오기">
+          <span class="material-symbols-rounded">my_location</span>
+          <span>내 위치</span>
+        </button>
+      </div>
+      
+      <!-- User Profile -->
+      <div class="user-profile hidden" id="user-profile">
+        <span class="user-email" id="user-email-display"></span>
+        <button class="logout-btn" id="logout-btn" title="로그아웃">
+          <span class="material-symbols-rounded">logout</span>
+          <span>로그아웃</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Split Layout -->
+    <div class="main-container">
+      
+      <!-- Left Sidebar: List & Details -->
+      <aside class="sidebar" id="sidebar">
+        <!-- Sort Control Bar -->
+        <div class="list-sort-bar">
+          <div class="results-count"><strong id="results-count-num">0</strong>개의 맛집</div>
+          <div class="sort-tabs">
+            <button class="sort-tab active" id="sort-recent-btn">최신순</button>
+            <button class="sort-tab" id="sort-rating-btn">평점순</button>
+          </div>
+        </div>
+
+        <!-- Restaurant Cards List -->
+        <div class="list-scroll-area">
+          <ul class="gourmet-list" id="gourmet-list">
+            <!-- JavaScript dynamically fills cards here -->
+          </ul>
+        </div>
+        
+        <!-- Quick Instructions Card -->
+        <div class="helper-info-card">
+          <span class="material-symbols-rounded">info</span>
+          <p>지도를 마우스로 <strong>클릭</strong>하여 새로운 맛집을 등록해 보세요!</p>
+        </div>
+      </aside>
+
+      <!-- Right Pane: The Map -->
+      <div class="map-pane" style="position: relative;">
+        <!-- Floating Location Search Bar -->
+        <div id="map-search-container" style="position: absolute; top: 16px; left: 16px; z-index: 1000; display: flex; gap: 6px; width: 280px; box-shadow: var(--shadow-md); border-radius: 8px; overflow: hidden; background-color: var(--surface-color); border: 1px solid var(--border-color); padding: 2px;">
+          <input type="text" id="map-search-input" placeholder="지역, 역, 주소 검색 (예: 강남역)" style="flex: 1; border: none; padding: 8px 12px; font-size: 13px; outline: none; background-color: var(--surface-color); color: var(--text-main);">
+          <button type="button" onclick="searchMapLocation()" style="background: none; border: none; color: var(--primary-color); padding: 0 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--want-to-go-color)'" onmouseout="this.style.color='var(--primary-color)'">
+            <span class="material-symbols-rounded" style="font-size: 20px;">search</span>
+          </button>
+        </div>
+
+        <div id="map"></div>
+        <!-- Floating Buttons for searching & clearing nearby real restaurants -->
+        <div id="nearby-btn-container" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; gap: 8px;">
+          <button id="search-nearby-btn" class="floating-map-btn" 
+                  style="background-color: var(--surface-color); color: var(--primary-color); border: 1px solid var(--border-color); border-radius: 20px; padding: 10px 18px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-md); cursor: pointer; transition: var(--transition-smooth);"
+                  onmouseover="this.style.backgroundColor='var(--bg-color)'; this.style.transform='scale(1.02)';"
+                  onmouseout="this.style.backgroundColor='var(--surface-color)'; this.style.transform='scale(1)';">
+            <span class="material-symbols-rounded" style="font-size: 18px; font-variation-settings: 'FILL' 1;">search</span>
+            <span>이 지역 실제 맛집 검색</span>
+          </button>
+          <button id="clear-nearby-btn" class="floating-map-btn hidden" 
+                  onclick="clearNearbyPlaces()"
+                  style="background-color: var(--surface-color); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 20px; padding: 10px 14px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: var(--shadow-md); cursor: pointer; transition: var(--transition-smooth);"
+                  onmouseover="this.style.backgroundColor='var(--bg-color)'; this.style.color='var(--want-to-go-color)'; this.style.transform='scale(1.02)';"
+                  onmouseout="this.style.backgroundColor='var(--surface-color)'; this.style.color='var(--text-secondary)'; this.style.transform='scale(1)';">
+            <span class="material-symbols-rounded" style="font-size: 18px;">close</span>
+            <span>숨기기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 1: Gourmet Registration Form -->
+    <div class="modal-backdrop hidden" id="add-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>새로운 맛집 등록</h2>
+          <button class="close-modal-btn" onclick="closeModal('add-modal')">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Kakao Place Search Bar -->
+          <div class="place-search-container" style="margin-bottom: 20px; border-bottom: 1px dashed var(--border-color); padding-bottom: 16px;">
+            <label style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">실제 맛집 검색 등록 (추천)</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="kakao-search-input" placeholder="예: 스타벅스 서울역점" style="flex: 1; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; background-color: var(--bg-color); color: var(--text-main);">
+              <button type="button" class="btn btn-primary" onclick="searchKakaoPlaces()" style="padding: 0 16px; font-size: 13px; font-weight: 700; border-radius: 8px; flex-shrink: 0; background-color: var(--primary-color);">검색</button>
+            </div>
+            <!-- Search Results Dropdown List -->
+            <ul id="kakao-search-results" class="kakao-search-results hidden" style="list-style: none; margin-top: 8px; padding: 0; max-height: 160px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-color); box-shadow: var(--shadow-md);">
+              <!-- Search results list items will go here -->
+            </ul>
+          </div>
+
+          <form id="add-form" onsubmit="saveGourmet(event)">
+            <!-- Lat/Lng Readonly Inputs -->
+            <input type="hidden" id="form-lat">
+            <input type="hidden" id="form-lng">
+            
+            <div class="form-group">
+              <label for="form-name">맛집 이름 *</label>
+              <input type="text" id="form-name" required placeholder="예: 맛있는 돈까스집">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-category">카테고리 *</label>
+                <select id="form-category" required>
+                  <option value="한식">한식</option>
+                  <option value="중식">중식</option>
+                  <option value="일식">일식</option>
+                  <option value="양식">양식</option>
+                  <option value="카페">카페/디저트</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-visited">방문 상태 *</label>
+                <select id="form-visited" onchange="toggleVisitedFormFields(this.value)">
+                  <option value="false">가보고 싶은 곳 (빨간색)</option>
+                  <option value="true">방문한 곳 (초록색)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Visited fields (Hidden by default, shown when visited is true) -->
+            <div class="visited-only-fields hidden" id="visited-fields-container">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="form-date">방문 날짜</label>
+                  <input type="date" id="form-date">
+                </div>
+                <div class="form-group">
+                  <label>개인 평점 *</label>
+                  <div class="star-rating">
+                    <input type="radio" name="rating" id="star5" value="5"><label for="star5" class="material-symbols-rounded">star</label>
+                    <input type="radio" name="rating" id="star4" value="4"><label for="star4" class="material-symbols-rounded">star</label>
+                    <input type="radio" name="rating" id="star3" value="3"><label for="star3" class="material-symbols-rounded">star</label>
+                    <input type="radio" name="rating" id="star2" value="2"><label for="star2" class="material-symbols-rounded">star</label>
+                    <input type="radio" name="rating" id="star1" value="1" checked><label for="star1" class="material-symbols-rounded">star</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="form-address">주소</label>
+              <input type="text" id="form-address" placeholder="지도를 클릭하면 자동 입력되거나 적어주세요.">
+            </div>
+
+            <div class="form-group">
+              <label for="form-img">사진 URL</label>
+              <input type="url" id="form-img" placeholder="https://example.com/food.jpg">
+            </div>
+
+            <div class="form-group">
+              <label for="form-memo">메모</label>
+              <textarea id="form-memo" rows="3" placeholder="맛 평이나 기억나는 점을 적어보세요."></textarea>
+            </div>
+
+            <div class="modal-footer-actions">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('add-modal')">취소</button>
+              <button type="submit" class="btn btn-primary">맛집 저장</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Gourmet Detail View & Edit 방문 관리 -->
+    <div class="modal-backdrop hidden" id="detail-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="category-badge" id="detail-category">한식</span>
+          <button class="close-modal-btn" onclick="closeModal('detail-modal')">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="detail-img-container" id="detail-img-box">
+            <img src="" id="detail-img" alt="맛집 사진">
+          </div>
+          
+          <div class="detail-title-row">
+            <h2 id="detail-name">맛집 이름</h2>
+            <div id="detail-visited-badge" class="visited-status-badge">방문 완료</div>
+          </div>
+          
+          <div class="detail-address-row">
+            <span class="material-symbols-rounded">location_on</span>
+            <span id="detail-address">지번 주소</span>
+          </div>
+
+          <!-- Visited info section -->
+          <div class="detail-visit-section" id="detail-visit-section">
+            <div class="detail-rating-row">
+              <span class="rating-label">나의 평점:</span>
+              <div class="star-rating detail-star-rating" id="detail-stars-rating" style="display: flex; gap: 4px; justify-content: flex-start; flex-direction: row;">
+                <!-- Clickable stars generated by JavaScript -->
+              </div>
+            </div>
+            <div class="detail-date-row">
+              <span class="date-label">방문일:</span>
+              <input type="date" id="detail-date-input" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 4px 8px; font-size: 13px; outline: none; background-color: var(--surface-color);">
+            </div>
+          </div>
+
+          <div class="detail-memo-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4>메모</h4>
+              <span style="font-size: 11px; color: var(--text-secondary);">* 입력 시 자동 저장</span>
+            </div>
+            <textarea id="detail-memo-input" rows="3" placeholder="기록해 둘 메모를 적어보세요..." style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; resize: none; font-family: inherit; background-color: var(--surface-color); transition: var(--transition-smooth);"></textarea>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="modal-footer-actions detail-footer">
+            <button type="button" class="btn btn-danger-outline" id="detail-delete-btn">
+              <span class="material-symbols-rounded">delete</span>
+              <span>삭제</span>
+            </button>
+            <button type="button" class="btn btn-primary" id="detail-toggle-visit-btn">
+              <span>방문 상태 토글</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Auth Overlay (Email/Password Login) -->
+    <div class="modal-backdrop" id="auth-modal">
+      <div class="modal-card auth-card" style="max-width: 380px; border-radius: 16px; overflow: hidden; background-color: var(--surface-color); box-shadow: var(--shadow-lg);">
+        <div class="auth-tabs" style="display: flex; border-bottom: 1px solid var(--border-color); background-color: var(--bg-color);">
+          <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')" style="flex: 1; height: 56px; border: none; background: none; font-size: 15px; font-weight: 700; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); border-bottom: 2px solid transparent;">로그인</button>
+          <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')" style="flex: 1; height: 56px; border: none; background: none; font-size: 15px; font-weight: 700; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); border-bottom: 2px solid transparent;">회원가입</button>
+        </div>
+        <div class="modal-body auth-body" style="padding: 24px;">
+          <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+            <div class="form-group" style="margin-bottom: 16px; text-align: left;">
+              <label for="auth-email" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">이메일 주소</label>
+              <input type="email" id="auth-email" required placeholder="example@email.com" style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; background-color: var(--bg-color); color: var(--text-main);">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+              <label for="auth-password" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">비밀번호 (6자 이상)</label>
+              <input type="password" id="auth-password" required placeholder="비밀번호 입력" style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13px; outline: none; background-color: var(--bg-color); color: var(--text-main);">
+            </div>
+            
+            <div class="auth-error-msg hidden" id="auth-error" style="margin-bottom: 16px;"></div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="auth-submit-btn" style="width: 100%; padding: 12px 0; font-size: 14px; font-weight: 700; border-radius: 8px;">로그인</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Delete Confirmation Overlay -->
+    <div class="modal-backdrop hidden" id="delete-confirm-modal">
+      <div class="modal-card confirm-card" style="max-width: 320px; text-align: center; padding: 24px;">
+        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">맛집 삭제</h2>
+        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">이 맛집을 지도에서 영구 삭제하시겠습니까?</p>
+        <div class="modal-footer-actions" style="justify-content: center; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('delete-confirm-modal')">취소</button>
+          <button type="button" class="btn btn-primary btn-delete" id="modal-delete-action-btn" style="background-color: var(--want-to-go-color);">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+  </div>
+
+  <!-- Leaflet.js script -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Leaflet.markercluster script -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+  
+  <!-- Supabase JS Client -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  
+  <!-- Kakao Maps API library -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=c5c3b1de06e69b3f3089b11eddeac545&libraries=services&autoload=false"></script>
+  
+  <!-- Custom JS Config & Application -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
