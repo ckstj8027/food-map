@@ -7,6 +7,7 @@ let markerClusterGroup = null;
 let nearbyPlacesLayerGroup = null; // Layer group for real places from search
 let currentMarkers = {}; // Store markers by gourmet ID
 let userLocationMarker = null;
+let searchLocationMarker = null; // Marker for geocoding search result
 let activeSort = 'recent'; // 'recent' or 'rating'
 let supabaseClient = null;
 
@@ -164,10 +165,15 @@ function handleAuthStateChange(session) {
     if (nearbyPlacesLayerGroup) {
       nearbyPlacesLayerGroup.clearLayers();
     }
+    if (searchLocationMarker) {
+      map.removeLayer(searchLocationMarker);
+      searchLocationMarker = null;
+    }
     const clearBtn = document.getElementById('clear-nearby-btn');
     if (clearBtn) {
       clearBtn.classList.add('hidden');
     }
+    document.getElementById('map-search-input').value = '';
     renderSidebarList();
   }
 }
@@ -575,6 +581,47 @@ window.searchMapLocation = function() {
         const lng = parseFloat(firstPlace.x);
         
         map.setView([lat, lng], 16);
+
+        // Remove previous search location marker
+        if (searchLocationMarker) {
+          map.removeLayer(searchLocationMarker);
+        }
+
+        // Create sky blue marker for search location (similar style but unique color)
+        const skyBlueIcon = L.divIcon({
+          className: 'custom-marker-container',
+          html: `
+            <div class="custom-marker-pin search-loc-marker" style="background-color: #00bcff; color: #00bcff; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,188,255,0.4);">
+              <span class="material-symbols-rounded pin-icon" style="font-size: 16px; color: #ffffff; font-variation-settings: 'FILL' 1;">location_on</span>
+            </div>
+          `,
+          iconSize: [28, 38],
+          iconAnchor: [14, 38],
+          popupAnchor: [0, -38]
+        });
+
+        searchLocationMarker = L.marker([lat, lng], { icon: skyBlueIcon }).addTo(map);
+
+        // Add helpful register popup
+        const popupHtml = `
+          <div class="popup-content-box" style="text-align: center; padding: 4px; min-width: 160px;">
+            <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 2px; color: var(--text-main);">${firstPlace.place_name}</h4>
+            <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.4;">${firstPlace.road_address_name || firstPlace.address_name}</p>
+            <button class="popup-btn" style="background-color: var(--primary-color); border: none; border-radius: 4px; padding: 6px 12px; color: #ffffff !important; font-size: 11px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.2s;" 
+              onclick="openAddModalForRealPlace('${firstPlace.place_name.replace(/'/g, "\\'")}', '${(firstPlace.road_address_name || firstPlace.address_name).replace(/'/g, "\\'")}', ${lat}, ${lng}, '${firstPlace.category_name.replace(/'/g, "\\'")}')">
+              내 맛집으로 등록
+            </button>
+          </div>
+        `;
+
+        searchLocationMarker.bindPopup(popupHtml).openPopup();
+        
+        // Show clear button since we have a search result displayed
+        const clearBtn = document.getElementById('clear-nearby-btn');
+        if (clearBtn) {
+          clearBtn.classList.remove('hidden');
+        }
+
         showToast(`'${firstPlace.place_name}' 위치로 지도를 이동했습니다.`, "success");
       } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
         showToast("검색 결과가 없습니다. 다른 지명으로 검색해 보세요.", "info");
@@ -741,11 +788,16 @@ window.clearNearbyPlaces = function() {
   if (nearbyPlacesLayerGroup) {
     nearbyPlacesLayerGroup.clearLayers();
   }
+  if (searchLocationMarker) {
+    map.removeLayer(searchLocationMarker);
+    searchLocationMarker = null;
+  }
   const clearBtn = document.getElementById('clear-nearby-btn');
   if (clearBtn) {
     clearBtn.classList.add('hidden');
   }
-  showToast("주변 검색 마커를 숨겼습니다.", "info");
+  document.getElementById('map-search-input').value = '';
+  showToast("검색 결과 마커를 숨겼습니다.", "info");
 };
 
 // Render Unregistered Real Places on Map
